@@ -2,9 +2,8 @@ import { useState } from 'react'
 import ProductCard from '../components/ProductCard'
 import ShoppingCart from '../components/ShoppingCart'
 import { MENUS } from '../data/menus'
+import { appendOrder } from '../storage/orders'
 import { addToCart, getCartTotal, removeCartLine, updateCartQuantity } from '../utils/cart'
-
-const ORDERS_STORAGE_KEY = 'cozy-orders'
 
 export default function OrderPage() {
   const [cart, setCart] = useState([])
@@ -49,8 +48,7 @@ export default function OrderPage() {
     }
 
     try {
-      const existing = JSON.parse(localStorage.getItem(ORDERS_STORAGE_KEY) || '[]')
-      localStorage.setItem(ORDERS_STORAGE_KEY, JSON.stringify([...existing, order]))
+      appendOrder(order)
       setCart([])
       showToast('주문이 완료되었습니다')
     } catch {
