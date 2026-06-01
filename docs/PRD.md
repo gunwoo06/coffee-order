@@ -2,9 +2,9 @@
 
 | 항목 | 내용 |
 |------|------|
-| 문서 버전 | 1.0 |
-| 대상 화면 | 주문하기 |
-| 앱 구성 | 주문하기 · 관리자 (본 문서는 **주문하기**만 다룸) |
+| 문서 버전 | 1.1 |
+| 대상 | 주문하기 화면(프론트) · 백엔드(데이터·API) |
+| 앱 구성 | 주문하기 · 관리자 |
 | 브랜드명 | COZY |
 | 최종 수정일 | 2026-05-31 |
 
@@ -327,4 +327,315 @@ interface OrderPayload {
 | 문서 | 상태 |
 |------|------|
 | [PRD — 관리자 화면](./PRD-admin.md) | 작성 완료 |
-| API 명세 | 백엔드 확정 후 연동 |
+| 백엔드 API·데이터 모델 | 본 문서 §13~§16 |
+
+---
+
+# Part 2. 백엔드 PRD
+
+COZY 주문 앱의 **서버·데이터베이스·API** 요구사항이다. 프론트엔드(MVP)는 현재 `localStorage`로 동작하며, 본 스펙에 맞춰 API 서버를 구축하면 교체·연동한다.
+
+---
+
+## 13. 데이터 모델
+
+### 13.1 Menus (메뉴)
+
+| 필드 | 타입 | 필수 | 설명 |
+|------|------|------|------|
+| `id` | string (PK) | O | 메뉴 고유 ID (예: `americano-ice`) |
+| `name` | string | O | 커피 이름 (예: 아메리카노(ICE)) |
+| `description` | string | O | 설명 |
+| `price` | integer | O | 기본 가격(원, 정수) |
+| `image_url` | string | O | 이미지 URL 또는 정적 경로 |
+| `stock_quantity` | integer | O | 재고 수량 (0 이상) |
+| `created_at` | timestamp | O | 생성 시각 |
+| `updated_at` | timestamp | O | 수정 시각 |
+
+**노출 규칙**
+
+- **주문하기(고객) 화면**: `stock_quantity`는 API 응답에서 **제외**하거나 null — 재고는 고객에게 보이지 않음.
+- **관리자 화면**: 재고 수량 표시·수정 가능.
+
+### 13.2 Options (옵션)
+
+| 필드 | 타입 | 필수 | 설명 |
+|------|------|------|------|
+| `id` | string (PK) | O | 옵션 ID (예: `shot`) |
+| `name` | string | O | 옵션 이름 (예: 샷 추가) |
+| `price` | integer | O | 옵션 추가 가격(원) |
+| `menu_id` | string (FK) | O | 연결할 메뉴 (`Menus.id`) |
+| `created_at` | timestamp | O | 생성 시각 |
+
+- 하나의 메뉴에 여러 옵션을 연결할 수 있다 (1:N).
+- 동일 옵션 정의를 여러 메뉴에 쓸 경우 메뉴마다 행을 두거나, 공통 옵션 테이블 + `menu_options` 조인 테이블로 확장 가능.
+
+### 13.3 Orders (주문)
+
+| 필드 | 타입 | 필수 | 설명 |
+|------|------|------|------|
+| `id` | string (PK) | O | 주문 ID (UUID 등) |
+| `ordered_at` | timestamp | O | 주문 일시 |
+| `total_amount` | integer | O | 주문 총액(원) |
+| `status` | enum | O | 주문 상태 (§13.4) |
+| `created_at` | timestamp | O | 레코드 생성 시각 |
+| `updated_at` | timestamp | O | 상태 변경 시각 |
+
+### 13.4 OrderItems (주문 상세)
+
+주문 내용(메뉴·수량·옵션·금액)은 정규화하여 저장한다.
+
+| 필드 | 타입 | 필수 | 설명 |
+|------|------|------|------|
+| `id` | string (PK) | O | 주문 상세 ID |
+| `order_id` | string (FK) | O | `Orders.id` |
+| `menu_id` | string (FK) | O | 메뉴 ID |
+| `menu_name` | string | O | 주문 시점 메뉴명(스냅샷) |
+| `quantity` | integer | O | 수량 |
+| `unit_price` | integer | O | 단가(기본가+옵션 합) |
+| `line_total` | integer | O | 소계 |
+| `options_json` | json / text | O | 선택 옵션 목록 `[{ id, name, price }]` |
+
+### 13.5 OrderStatus (주문 상태)
+
+| 코드 | 표시명 | 설명 |
+|------|--------|------|
+| `PENDING` | (신규) | 고객이 방금 제출. 관리자 미처리 |
+| `RECEIVED` | 주문 접수 | 접수 완료 (기본 목표 상태) |
+| `PREPARING` | 제조 중 | 제조 진행 |
+| `DONE` | 완료 | 제조·전달 완료 |
+
+**상태 전이 (관리자)**
+
+```
+PENDING ──[주문 접수]──► RECEIVED ──[제조 시작]──► PREPARING ──[제조 완료]──► DONE
+```
+
+> 요구사항상 「주문 접수 → 제조 중 → 완료」 흐름에 맞추며, 고객 제출 직후 `PENDING`을 두면 [관리자 PRD](./PRD-admin.md)와 동일하게 **주문 접수** 버튼으로 `RECEIVED`로 전이한다. 백엔드만 단순화할 경우 주문 생성 시 곧바로 `RECEIVED`로 저장해도 된다.
+
+### 13.6 ER 관계 (요약)
+
+```mermaid
+erDiagram
+  Menus ||--o{ Options : has
+  Orders ||--|{ OrderItems : contains
+  Menus ||--o{ OrderItems : references
+```
+
+---
+
+## 14. 데이터 스키마 — 사용자 흐름
+
+| 단계 | 주체 | 동작 | 데이터 처리 |
+|------|------|------|-------------|
+| 1 | 고객 | **주문하기** 화면 진입 | `Menus`(+ `Options`) 조회 → 브라우저에 메뉴·옵션 표시. **재고는 응답에 포함하지 않음** |
+| 2 | 고객 | 메뉴·옵션 선택 후 장바구니에 담기 | 클라이언트 장바구니 상태(세션/메모리). DB 저장 없음 |
+| 3 | 고객 | 장바구니 **주문하기** 클릭 | `Orders` + `OrderItems` INSERT. `ordered_at`, 메뉴·수량·옵션·금액 저장. **메뉴 재고 차감** (§16.3) |
+| 4 | 관리자 | **주문 현황** 조회 | `Orders` 목록 표시. 기본 표시 상태 **주문 접수**(`PENDING` 또는 `RECEIVED`) |
+| 5 | 관리자 | 상태 버튼 클릭 | `Orders.status` UPDATE: 주문 접수 → 제조 중 → 완료 |
+| 6 | 관리자 | **재고 현황** +/- | `Menus.stock_quantity` UPDATE (관리자 전용 API) |
+
+---
+
+## 15. API 설계
+
+Base URL 예: `http://localhost:3000/api`  
+응답 형식: JSON. 에러 시 `{ "error": "메시지" }` + HTTP 상태 코드.
+
+### 15.1 요구사항 매핑
+
+| # | 요구사항 | API |
+|---|----------|-----|
+| 1 | 주문하기 진입 시 DB에서 커피 메뉴 목록 조회·표시 | `GET /menus` |
+| 2 | 주문하기 클릭 시 주문 정보 DB 저장 | `POST /orders` |
+| 3 | 주문에 따라 메뉴 재고 수정 | `POST /orders` 처리 시 트랜잭션 내 재고 차감 |
+| 4 | 주문 ID로 해당 주문 정보 조회 | `GET /orders/:id` |
+
+### 15.2 메뉴 API
+
+#### `GET /menus`
+
+고객용 메뉴 목록. **재고 필드 미포함.**
+
+**Response 200**
+
+```json
+{
+  "menus": [
+    {
+      "id": "americano-ice",
+      "name": "아메리카노(ICE)",
+      "description": "시원하고 깔끔한 아이스 아메리카노",
+      "price": 4000,
+      "imageUrl": "/menus/americano-ice.png",
+      "options": [
+        { "id": "shot", "name": "샷 추가", "price": 500 },
+        { "id": "syrup", "name": "시럽 추가", "price": 0 }
+      ]
+    }
+  ]
+}
+```
+
+#### `GET /admin/menus`
+
+관리자용. **재고 포함.**
+
+**Response 200**
+
+```json
+{
+  "menus": [
+    {
+      "id": "americano-ice",
+      "name": "아메리카노 (ICE)",
+      "stockQuantity": 10
+    }
+  ]
+}
+```
+
+#### `PATCH /admin/menus/:menuId/stock`
+
+관리자 재고 조정.
+
+**Request**
+
+```json
+{ "delta": 1 }
+```
+
+또는 `{ "stockQuantity": 10 }` (절대값)
+
+**Response 200**: 갱신된 `stockQuantity`
+
+### 15.3 주문 API
+
+#### `POST /orders`
+
+장바구니 주문 생성 + **재고 차감**.
+
+**Request**
+
+```json
+{
+  "items": [
+    {
+      "menuId": "americano-ice",
+      "quantity": 1,
+      "selectedOptionIds": ["shot"]
+    }
+  ]
+}
+```
+
+**처리 규칙**
+
+1. 품목별 단가·소계·총액 서버에서 재계산(클라이언트 금액 신뢰하지 않음).
+2. 재고 부족 시 `409 Conflict` — 주문 거부.
+3. 트랜잭션: `Orders` + `OrderItems` INSERT, `Menus.stock_quantity` 차감.
+4. 초기 `status`: `PENDING` (또는 정책에 따라 `RECEIVED`).
+
+**Response 201**
+
+```json
+{
+  "id": "uuid",
+  "orderedAt": "2026-07-31T13:00:00.000Z",
+  "totalAmount": 4500,
+  "status": "PENDING",
+  "items": [ ... ]
+}
+```
+
+#### `GET /orders/:id`
+
+주문 ID로 상세 조회 (요구사항 4).
+
+**Response 200**: 주문 객체 + `items`  
+**Response 404**: 없는 ID
+
+#### `GET /admin/orders`
+
+관리자 주문 목록 (주문 현황).
+
+**Query (선택)**: `status`, `sort=orderedAt asc`
+
+**Response 200**
+
+```json
+{
+  "orders": [
+    {
+      "id": "uuid",
+      "orderedAt": "2026-07-31T13:00:00.000Z",
+      "totalAmount": 4000,
+      "status": "PENDING",
+      "itemsSummary": "아메리카노(ICE) x 1"
+    }
+  ]
+}
+```
+
+#### `PATCH /admin/orders/:id/status`
+
+관리자 상태 변경.
+
+**Request**
+
+```json
+{ "status": "RECEIVED" }
+```
+
+**허용 전이만** 수용 (§13.5). 잘못된 전이 시 `400 Bad Request`.
+
+### 15.4 대시보드 API (선택)
+
+#### `GET /admin/stats`
+
+```json
+{
+  "total": 10,
+  "received": 3,
+  "preparing": 2,
+  "done": 5
+}
+```
+
+집계 규칙은 [PRD — 관리자](./PRD-admin.md) §4.2.1과 동일 (`received` = `PENDING` + `RECEIVED`).
+
+---
+
+## 16. 비즈니스 규칙 (백엔드)
+
+| 규칙 | 설명 |
+|------|------|
+| 재고 차감 시점 | **주문 생성(`POST /orders`)** 시 품목별 `quantity`만큼 차감 |
+| 재고 음수 방지 | 차감 후 `stock_quantity < 0` 이면 롤백 |
+| 금액 검증 | 서버가 메뉴·옵션 단가로 총액 재계산 |
+| 고객 API | 재고 필드 비노출 |
+| 관리자 API | 재고·주문 상태·통계 노출 |
+
+---
+
+## 17. 프론트엔드(MVP)와의 매핑
+
+| 프론트 (현재) | 백엔드 (목표) |
+|---------------|---------------|
+| `src/data/menus.js` | `GET /menus` |
+| `localStorage` `cozy-orders` | `POST /orders`, `GET /admin/orders` |
+| `localStorage` `cozy-inventory` | `GET /admin/menus`, `PATCH .../stock` |
+| `OrderPage` 주문 제출 | `POST /orders` |
+| `AdminPage` 상태 버튼 | `PATCH /admin/orders/:id/status` |
+
+---
+
+## 18. 백엔드 수용 기준
+
+- [ ] `GET /menus`가 메뉴·옵션·이미지·가격을 반환하고 재고는 포함하지 않는다.
+- [ ] `POST /orders`가 주문 일시·상세(메뉴, 수량, 옵션, 금액)를 저장한다.
+- [ ] 주문 성공 시 해당 메뉴 재고가 수량만큼 감소한다.
+- [ ] 재고 부족 시 주문이 거부된다.
+- [ ] `GET /orders/:id`가 주문 ID로 상세를 반환한다.
+- [ ] 관리자 API로 주문 목록·상태 변경(주문 접수 → 제조 중 → 완료)이 가능하다.
+- [ ] 관리자 API로 재고 조회·수정이 가능하다.
