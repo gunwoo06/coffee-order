@@ -139,6 +139,18 @@
   gap: 1.25rem;
 }
 
+.menu-grid__status {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 2rem;
+  text-align: center;
+  color: var(--color-muted);
+}
+
+.menu-grid__status--error {
+  color: #b91c1c;
+}
+
 @media (max-width: 900px) {
   .menu-grid {
     grid-template-columns: repeat(2, 1fr);
