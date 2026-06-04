@@ -6,8 +6,8 @@ SELECT opt.id, m.id, opt.name, opt.price
 FROM public.menus m
 CROSS JOIN (
   VALUES
-    ('shot', '샷 추가', 500),
-    ('syrup', '시럽 추가', 0)
+        ('extra-rice', '양많이', 1000),
+    ('rice-bowl', '공기밥 추가', 1000)     
 ) AS opt(id, name, price)
 ON CONFLICT (id, menu_id) DO UPDATE SET
   name = EXCLUDED.name,

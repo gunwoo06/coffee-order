@@ -6,16 +6,39 @@ import { INVENTORY_STORAGE_KEY, ORDERS_STORAGE_KEY } from '../constants/storage'
 import { loadInventory, updateInventoryQuantity } from '../storage/inventory'
 import { loadOrders, updateOrderStatus } from '../storage/orders'
 import { computeDashboardStats } from '../utils/orderStatus'
+import { isProd } from '../config/app'
+import { fetchMenus } from '../api/menus'
+import { MENUS } from '../data/menus'
 
 const POLL_MS = 3000
 
 export default function AdminPage() {
   const [orders, setOrders] = useState([])
   const [inventory, setInventory] = useState([])
+  const [menus, setMenus] = useState([])
 
-  const refresh = useCallback(() => {
+  const refresh = useCallback(async () => {
     setOrders(loadOrders())
-    setInventory(loadInventory())
+    
+    let currentMenus = []
+    if (isProd) {
+      try {
+        currentMenus = await fetchMenus()
+      } catch {
+        currentMenus = MENUS
+      }
+    } else {
+      currentMenus = MENUS
+    }
+    
+    setMenus(currentMenus)
+    // 메뉴 API에서 받은 stockQuantity를 직접 재고로 사용
+    const inventoryFromMenus = currentMenus.map(menu => ({
+      menuItemId: menu.id,
+      name: menu.name,
+      quantity: menu.stockQuantity ?? 10
+    }))
+    setInventory(inventoryFromMenus)
   }, [])
 
   useEffect(() => {

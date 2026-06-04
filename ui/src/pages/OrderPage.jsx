@@ -5,7 +5,33 @@ import ShoppingCart from '../components/ShoppingCart'
 import { isProd } from '../config/app'
 import { MENUS } from '../data/menus'
 import { appendOrder } from '../storage/orders'
-import { addToCart, getCartTotal, removeCartLine, updateCartQuantity } from '../utils/cart'
+import { addToCart, getCartTotal, removeCartLine, updateCartQuantity, calcUnitPrice } from '../utils/cart'
+import { CART_STORAGE_KEY } from '../constants/storage'
+
+function loadCartFromStorage(menus) {
+  try {
+    const raw = localStorage.getItem(CART_STORAGE_KEY)
+    if (!raw) return []
+    const savedCart = JSON.parse(raw)
+    // 저장된 cart 데이터를 현재 메뉴 가격으로 재계산
+    return savedCart.map(line => {
+      const menu = menus.find(m => m.id === line.menuItemId)
+      if (!menu) return line
+      const unitPrice = calcUnitPrice(menu.basePrice, line.selectedOptions || [])
+      return {
+        ...line,
+        unitPrice,
+        lineTotal: unitPrice * line.quantity
+      }
+    })
+  } catch {
+    return []
+  }
+}
+
+function saveCartToStorage(cart) {
+  localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart))
+}
 
 export default function OrderPage() {
   const [menus, setMenus] = useState([])
@@ -27,8 +53,21 @@ export default function OrderPage() {
       if (isProd) {
         try {
           const data = await fetchMenus()
-          if (!cancelled) setMenus(data)
+          console.log('API에서 받은 메뉴 데이터:', data)
+          const processedData = data.map(menu => {
+            const localMenu = MENUS.find(m => m.id === menu.id)
+            return {
+              ...menu,
+              options: localMenu?.options ?? menu.options
+            }
+          }).sort((a, b) => b.basePrice - a.basePrice) // 가격 높은순 → 낮은 순으로 정렬
+          console.log('처리된 메뉴 데이터:', processedData)
+          if (!cancelled) {
+            setMenus(processedData)
+            setCart(loadCartFromStorage(processedData))
+          }
         } catch (err) {
+          console.error('메뉴 불러오기 오류:', err)
           if (!cancelled) {
             setLoadError(err.message || '메뉴를 불러오지 못했습니다')
             setMenus([])
@@ -38,7 +77,9 @@ export default function OrderPage() {
         }
       } else {
         if (!cancelled) {
-          setMenus(MENUS)
+          const sortedMenus = [...MENUS].sort((a, b) => b.basePrice - a.basePrice) // 가격 높은순 → 낮은 순으로 정렬
+          setMenus(sortedMenus)
+          setCart(loadCartFromStorage(sortedMenus))
           setLoading(false)
         }
       }
@@ -49,6 +90,13 @@ export default function OrderPage() {
       cancelled = true
     }
   }, [])
+
+  // cart가 변경될 때마다 로컬 스토리지에 저장
+  useEffect(() => {
+    if (menus.length > 0) {
+      saveCartToStorage(cart)
+    }
+  }, [cart, menus])
 
   const showToast = (message) => {
     setToast(message)

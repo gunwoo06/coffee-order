@@ -26,6 +26,7 @@ export const MENUS = [
     basePrice: 8000,
     description: '매콤한 김치와 밥의 완벽한 조화',
     image: MENU_IMAGES['kimchi-fried-rice'],
+    stockQuantity: 55,
     options: MENU_OPTIONS,
   },
   {
@@ -34,6 +35,7 @@ export const MENUS = [
     basePrice: 9000,
     description: '통통한 새우가 들어간 고소한 볶음밥',
     image: MENU_IMAGES['shrimp-fried-rice'],
+    stockQuantity: 10,
     options: MENU_OPTIONS,
   },
   {
@@ -42,6 +44,7 @@ export const MENUS = [
     basePrice: 7000,
     description: '시원하고 매콤한 김치찌개',
     image: MENU_IMAGES['kimchi-jjigae'],
+    stockQuantity: 10,
     options: MENU_OPTIONS,
   },
   {
@@ -50,6 +53,7 @@ export const MENUS = [
     basePrice: 7000,
     description: '고소한 된장의 깊은 맛',
     image: MENU_IMAGES['doenjang-jjigae'],
+    stockQuantity: 10,
     options: MENU_OPTIONS,
   },
   {
@@ -58,6 +62,7 @@ export const MENUS = [
     basePrice: 7500,
     description: '부드러운 순두부가 들어간 찌개',
     image: MENU_IMAGES['sundubu-jjigae'],
+    stockQuantity: 10,
     options: MENU_OPTIONS,
   },
   {
@@ -66,6 +71,7 @@ export const MENUS = [
     basePrice: 2000,
     description: '시원한 콜라',
     image: MENU_IMAGES['cola'],
-    options: MENU_OPTIONS,
+    stockQuantity: 10,
+    options: [],
   },
 ]
