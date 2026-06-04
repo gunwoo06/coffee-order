@@ -59,7 +59,11 @@ export default function AdminPage() {
   const stats = computeDashboardStats(orders)
 
   const handleInventoryAdjust = (menuItemId, delta) => {
-    setInventory(updateInventoryQuantity(menuItemId, delta))
+    setInventory(prev => prev.map(item => {
+      if (item.menuItemId !== menuItemId) return item
+      const newQuantity = Math.max(0, item.quantity + delta)
+      return { ...item, quantity: newQuantity }
+    }))
   }
 
   const handleStatusChange = (orderId, status) => {

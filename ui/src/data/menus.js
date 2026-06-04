@@ -23,10 +23,10 @@ export const MENUS = [
   {
     id: 'kimchi-fried-rice',
     name: '김치볶음밥',
-    basePrice: 8000,
+    basePrice: 123123,
     description: '매콤한 김치와 밥의 완벽한 조화',
     image: MENU_IMAGES['kimchi-fried-rice'],
-    stockQuantity: 55,
+    stockQuantity: 12321,
     options: MENU_OPTIONS,
   },
   {
