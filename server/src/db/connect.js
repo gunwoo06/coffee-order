@@ -1,9 +1,12 @@
 import { ensureDatabase } from './ensureDatabase.js'
 import { initSchema } from './initSchema.js'
 import { testConnection } from './pool.js'
+import { config } from '../config.js'
 
 export async function connectDatabase({ runMigrations = true } = {}) {
-  await ensureDatabase()
+  if (!config.db.skipEnsureDatabase) {
+    await ensureDatabase()
+  }
 
   if (runMigrations) {
     await initSchema()

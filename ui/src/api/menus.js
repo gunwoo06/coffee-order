@@ -2,9 +2,18 @@ const API_BASE = import.meta.env.VITE_API_BASE ?? ''
 
 export async function fetchMenus() {
   const res = await fetch(`${API_BASE}/api/menus`)
+
   if (!res.ok) {
-    throw new Error('메뉴 목록을 불러오지 못했습니다')
+    let detail = `HTTP ${res.status}`
+    try {
+      const body = await res.json()
+      if (body.error) detail = body.error
+    } catch {
+      /* ignore */
+    }
+    throw new Error(detail)
   }
+
   const data = await res.json()
   return data.menus ?? []
 }

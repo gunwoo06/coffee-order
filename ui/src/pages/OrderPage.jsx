@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { fetchMenus } from '../api/menus'
 import ProductCard from '../components/ProductCard'
 import ShoppingCart from '../components/ShoppingCart'
+import { isProd } from '../config/app'
+import { MENUS } from '../data/menus'
 import { appendOrder } from '../storage/orders'
 import { addToCart, getCartTotal, removeCartLine, updateCartQuantity } from '../utils/cart'
 
@@ -21,16 +23,24 @@ export default function OrderPage() {
     async function loadMenus() {
       setLoading(true)
       setLoadError(null)
-      try {
-        const data = await fetchMenus()
-        if (!cancelled) setMenus(data)
-      } catch (err) {
-        if (!cancelled) {
-          setLoadError(err.message || '메뉴를 불러오지 못했습니다')
-          setMenus([])
+
+      if (isProd) {
+        try {
+          const data = await fetchMenus()
+          if (!cancelled) setMenus(data)
+        } catch (err) {
+          if (!cancelled) {
+            setLoadError(err.message || '메뉴를 불러오지 못했습니다')
+            setMenus([])
+          }
+        } finally {
+          if (!cancelled) setLoading(false)
         }
-      } finally {
-        if (!cancelled) setLoading(false)
+      } else {
+        if (!cancelled) {
+          setMenus(MENUS)
+          setLoading(false)
+        }
       }
     }
 
@@ -92,9 +102,9 @@ export default function OrderPage() {
         {loading && <p className="menu-grid__status">메뉴를 불러오는 중...</p>}
         {loadError && (
           <p className="menu-grid__status menu-grid__status--error" role="alert">
-            {loadError}
+            메뉴를 불러오지 못했습니다.
             <br />
-            <small>API 서버(http://localhost:3001)가 실행 중인지 확인해 주세요.</small>
+            <small>{loadError}</small>
           </p>
         )}
         {!loading && !loadError && menus.length === 0 && (

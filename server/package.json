@@ -8,7 +8,9 @@
   "scripts": {
     "dev": "nodemon src/index.js",
     "start": "node src/index.js",
-    "db:init": "node scripts/db-init.js"
+    "db:init": "node scripts/db-init.js",
+    "db:schema": "node scripts/db-schema.js",
+    "db:seed": "node scripts/db-seed.js"
   },
   "engines": {
     "node": ">=18"
